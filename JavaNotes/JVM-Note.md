@@ -34,7 +34,16 @@
         * [VI. CMS收集器](#VICMS收集器)
         * [VII. G1收集器](#VIIG1收集器)
 * [五、JDK的命令行工具](#五JDK的命令行工具)
-# 一、Java内存区域*
+    * [1. jps](#1jps)
+    * [2. jstat](#2jstat)
+    * [3. jinfo](#3jinfo)
+    * [4. jmap](#4jmap)
+    * [5. jhat](#5jhat)
+    * [6. jstack](#6jstack)
+    * [7. 频繁GC排查与CPU飙升问题排查](#7频繁GC排查与CPU飙升问题排查)
+
+
+# 一、Java内存区域
  ![Java内存区域](../docs/内存区域.jpg)
 <br>
 
@@ -392,3 +401,94 @@ G1的内存结构：（其中H区为专门存放巨型对象，即超过Region�
 > 4. 筛选回收。需要STW，首先对各个Region的回收价值和成本进行排序，再根据用户所期望的GC停顿时间来制定回收计划。
 
 ![G1收集器](../docs/G1收集器.png)
+
+
+
+
+# 五、JDK的命令行工具
+
+## 1.jps
+**作用：显示指定系统内所有的HotSpot虚拟机进程(JVM Process Status Tool)**
+
+格式： jps [option] [hostid]<br>
+> option
+> 1. -l 输出主类的全名，若为Jar包则输出路径
+> 2. -v  输出虚拟机进程启动时的参数
+
+![jps](../docs/jps.png)
+
+
+## 2.jstat
+**作用：用于监视虚拟机各种运行状态信息的命令行工具**
+
+格式: jstat [option vmid [ interval[ s|ms ] [count] ]]
+
+>option
+> 1.  -class   监视类装置、卸载数量、总空间以及类装置所耗费的时间
+> 2. -gc   监视Java堆的情况
+> 3.  -gccapacity  与-gc差不多，主要关注堆中各个区域使用的最大最小空间
+> 4.  -gcutil   与-gc差不多，主要关注已使用的空间占总空间的百分比
+> 5.  -gccause   与-gcutil差不多，但会额外输出导致上一次GC产生的原因
+> 6.  -gcnew   监视新生代的状况
+> 7. -gcold     监视老年代的状况
+> 8. -gcpermcapacity   输出永久带使用到的最大、最小空间
+> 9.  -compiler  输出JIT编译器编译过的方法、耗时等信息
+
+例：jstat -gc 10700 10000 3  意思是每10000毫秒查询一次进程10700的堆情况，查3次
+![jstat](../docs/jstat.png)
+
+
+## 3.jinfo
+**作用：实时地查看和调整虚拟机各项参数（常用来查看参数）**
+
+格式： jinfo [ option ] pid
+
+>option 为空时输出全部参数
+> 1. -flags 输出全部参数
+> 2. -flag [name] ：输出对应名称的参数, 如 jinfo -flag DoEscapeAnalysis [pid]
+> 3. -flag [ +|- ]name  开启或关闭对应的参数
+> 4. -flag name=value 设定对应名称的参数
+![jinfo](../docs/jinfo.png)
+
+
+## 4.jmap
+**作用：Java内存映射工具**
+
+格式： jmap [ option ] vmid
+
+>option
+> 1. -histo  显示堆中对象统计信息
+> 2. -heap: 显示堆的详细信息 参数配置、收集器、分代情况(Linux/Solars平台有效)
+> 3. -F 强制生成dump快照
+
+![jmap](../docs/jmap.png)
+
+## 5.jhat
+**作用：与jmap搭配使用，来分析jmap生成的堆转储快照**
+
+## 6.jstack
+**作用：用于生成虚拟机当前时刻的线程快照，线程快照就是当前虚拟机内每一条线程正在执行的方法堆栈的集合，目的是定位线程出现长时间停顿的原因。**
+
+命令： jstack [ option ] vimd
+> option
+> 1. -F  强制输出线程堆栈
+> 2. -l   除了堆栈外，显示关于锁的附加信息
+> 3. -m  如果调用了本地，可以显示C/C++的堆栈
+
+![jstack](../docs/jstack.png)
+
+
+## 7.频繁GC排查与CPU飙升问题排查
+
+1. 频繁GC排查
+>1. 用 jps -l 先找出Java进程ID
+>2. 使用jstat -gc [pid] 250 20查看GC增长情况
+>3. 使用jmap -dump:format=b,file=heapDump 进程ID生成堆转储文件
+>4. 用可视化工具分析堆情况结合代码解决
+
+2. CPU飙升问题排查
+>1. 用 jps -l 先找出Java进程ID
+>2. 用top -Hp 找出最耗CPU的线程，其中TIME列值最高的就是最耗CPU的线程，记下ID。H代表线程模式，p代表监控某个进程
+>3. 将该ID转化为十六进制值，printf "%x" ID
+>4. 用 jstack  Java进程ID | grep 线程十六进制值(线程ID用十六进制数表示)，即可看到相应的耗时线程信息
+
