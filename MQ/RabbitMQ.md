@@ -56,4 +56,36 @@ RabbitMQ整体上是一个生产者与消费者模型，主要负责接收、存
 <br>
 
 > Broker: 消息中间件的服务节点<br><br>
-> 对于RabbitMQ来说，一个Broker可以简单看作一个RabbitMQ服务节点。
+> 对于RabbitMQ来说，一个Broker可以简单看作一个RabbitMQ服务节点。<br>
+![消息队列的运转过程](../docs/消息队列的运转过程.png)
+
+<br>
+
+### II.队列
+> Queue：队列，是RabbitMQ的内部对象，用于存储消息 <br>
+> 生产者生产消息并最终投递到队列中，消费者可以从队列中获取消息并消费
+
+<br>
+
+### III.交换器、路由键、绑定
+> Exchange: 交换器。真实的生产环境是生产者将消息发送到Exchange，由Exchange将消息路由到一个或者多个队列。
+> 如果路由不到，或许会返回给生产者，或许直接丢弃。
+
+<br>
+
+> RoutingKey: 路由键。生产者将消息发送给Exchange的时候，一般会指定一个RoutingKey，
+> 用来指定这个消息的路由规则。而这个路由键需要与交换器类型和BindingKey联合使用才能最终生效
+
+<br>
+
+> Binding: 绑定。RabbitMQ中通过绑定将交换器与队列关联起来，在绑定的时候一般会指定BindingKey
+> 当BindingKey与RoutingKey相匹配时，消息就会被交换器路由到相应的队列
+
+![绑定](../docs/绑定.jpg)
+
+<br>
+
+### IV.交换器类型
+常用的交换器类型有fanout、direct、topic、headers这四种
+
+> 1. fanout:
