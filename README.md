@@ -6,7 +6,7 @@
 
 ## Java
 ### [📙JVM的基础知识](./JavaNotes/JVM-Note.md)
-
+### [📗让代码简洁直观-Lambda+Stream](./JavaNotes/Lambda和Stream.md)
 
 ## 容器技术
 ### [📙初识Docker](./docker/Docker.md)
