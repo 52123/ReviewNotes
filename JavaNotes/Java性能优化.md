@@ -139,3 +139,22 @@ protected RuntimeException(String message, Throwable cause,
 
 #### II. 智能扩容
 当访问量达到某个阈值时，系统可以实现自动扩容。可以使用Kubernetes来实现
+
+
+## 三、Java字符串性能优化
+
+### 1. 如何构建超大字符串
+用加号把字符串和变量拼接时，会被编译器优化成StringBuilder
+
+在多线程编程时，StringBuilder会存在线程安全问题，可以使用StringBuffer，不过性能会下降
+
+### 2. 使用String.intern()节省内存
+每次赋值时使用String的intern方法，如果常量池中有相同值，就会重复使用该对象
+
+如果对空间要求高于时间要求，且存在大量重复字符串时，可以考虑使用常量池存储。
+
+常量池的实现类似HashTable。存储的数据越多，遍历的时间复杂度就会增加
+
+### 3. 复习巩固
+JDK8以后，字符串常量池存在于Java堆中，唯一由java.lang.String管理。它和运行时常量池、类文件常量池无关
+
