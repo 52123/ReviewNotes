@@ -158,3 +158,51 @@ protected RuntimeException(String message, Throwable cause,
 ### 3. 复习巩固
 JDK8以后，字符串常量池存在于Java堆中，唯一由java.lang.String管理。它和运行时常量池、类文件常量池无关
 
+
+## 四、ArrayList与LinkedList
+
+### 1. 为什么ArrayList中的elementData属性会被transient修饰
+主要属性：size、elementData、default_capacity
+
+因为ArrayList是基于数组实现的，由于数组是基于动态扩展的，所以不是所有被分配的空间都存储了元素。
+
+为了避免序列化没有存储数据的内存空间，它内部会提供writeObject和readObject来完成序列化
+
+>使用 transient 修饰数组，是防止对象数组被其他外部方法序列化
+
+
+### 2. 通过构建函数指定数组初始大小，有助于减少扩容
+当清楚存储数据大小时，指定数组初始大小，并使用数组未尾添加元素，那么在大量新增元素的场景下，性能反而比List集合要好
+
+数据删除元素时，需要重组，当元素越靠前，重组的开销就越大
+
+### 3. LinkedList的实现
+LinkedList 就是由 Node 结构对象连接而成的一个双向链表，主要属性有size、first、last，它们都被transient修饰。
+
+Node结构包含元素内容item以及前后指针
+
+> 1.7之前，LinkedList中只包含一个Entry结构的header属性，并在初始化的时候初始化一个空的Entry，它的前后指针
+>都指向自己，形成一个循环双向链表
+
+
+> 1.7以后，Entry结构换成了Node结构，并新增了Node结构的first属性以及last属性
+>
+>好处：清晰表达了链头链尾的概念，并且链头和链尾的插入删除操作更加便捷了
+
+由于LinkedList内存不连续，所以不能实现快速随机访问，自然不能实现RandomAccess接口
+
+first、last被transient关键字修饰是因为序列化时不会只对首尾进行序列化，LinkedList也是自行实现writeObject和readObject的
+
+
+### 4. 为什么ArrayList没有负载因子而HashMap有
+HashMap有负载因子是基于折衷的考虑，因为数组太短会导致哈希冲突增加，从而链表增长导致查询效率下降。而数组太长会导致新增元素性能下降
+
+### 5. ArrayList遍历比LinkedList快的底层原因
+数组的实现是在内存当中是一块连续的内存空间，而链表所有元素可能分布在内存的不同位置，对于数组这种数据结构来说对CPU读是非常友好的，不管是CPU从内存读数据读到高速缓存还是线程从磁盘读数据到内存时，都不只是读取需要的那部分数据，而是读取相关联的某一块地址数据，这样的话对于在遍历数组的时候，在一定程度上提高了CPU高速缓存的命中率，减少了CPU访问内存的次数从而提高了效率
+
+
+### 注意
+在集合中进行remove操作时，不要在 foreach 循环里进行元素的 remove/add 操作。remove 元素请使用 Iterator方式，如果并发操作，需要对 Iterator 对象加锁。
+
+
+
