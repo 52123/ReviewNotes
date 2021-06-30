@@ -246,3 +246,103 @@ long   between  -128 and 127
 
 ### 7. 继承
 
+
+
+## 三、IEEE754浮点数
+
+### 1. n位二进制可以表示的信息量
+
+数字计算机只能处理离散数据，二进制的位数直接决定了它能表示的离散数据个数，也决定了它所能表示的信息个数，对于n位二进制数，它可以表示的信息量为2^N^
+
+
+
+假如约定这样8位编码：最低两位为小数区域，其余是整数区域，就有
+
+```
+000000.00 // 表示 0.0
+000000.01 // 表示 0.25
+000000.10 // 表示 0.5
+000000.11 // 表示 0.75
+000001.00 // 表示 1.0
+000001.01 // 表示 1.25
+```
+
+我们发现，介于0.0到0.25的数字被跳过了，而即使把小数区域的位长扩大到8位、16位、甚至一个极大的位数，也无法充分表示介于0.0到0.25所有的数。这是因为，在0.0到0.25之间的数是连续的，有无限多个数，但是**有限的N位长二进制最多只能表示2^N^个信息量**，有限的信息量无法表示无限的数据量，这就是现实世界与计算机世界的矛盾
+
+
+
+### 2. 定位数表示
+
+约定整数部分和小数部分为固定位置的格式，就是定点数表示
+
+格式：分为符号位、整数部分、隐含的小数点、小数部分
+
+特点：整数部分和小数部分位长固定，当需要表示绝对值特大或者特小时需要很大的空间
+
+
+
+### 3. 浮点数表示
+
+浮点数使用科学计数法存储数字，小数点的位置根据指数的大小浮点
+
+格式：分为符号位、指数、尾数。N = 2^E^ * M
+
+特点：一部分位作为指数，可以扩大所表示的数值范围
+
+ 意义：是数字计算机表示实数的格式，并以`IEEE 754 (IEEE Standard for Binary Floating-Point Arithmetic)`为标准
+
+
+
+### 4. IEEE 754标准的浮点数
+
+**32位浮点数格式：**
+
+![32位浮点数](../docs/32位浮点数.png)
+
+
+
+
+
+单精度浮点数：1个符号位，8个指数位，23个小数位
+
+双精度浮点数：1个符号位，11个指数位，52个小数位
+
+
+
+
+
+
+
+## 四、类加载
+
+
+
+
+
+### 为什么ArrayList里面的数组要定义成transient
+
+假如elementData的长度为10，而其中只有5个元素，那么在序列化的时候只需要存储5个元素，而数组中后面5个元素是不需要存储的。于是将elementData定义为transient，避免了Java自带的序列化机制，并定义了两个方法writeObject和readObject，实现了自己可控制的序列化
+
+```java
+transient Object[] elementData;
+
+private void writeObject(java.io.ObjectOutputStream s)
+        throws java.io.IOException{
+        // Write out element count, and any hidden stuff
+        int expectedModCount = modCount;
+        s.defaultWriteObject();
+
+        // Write out size as capacity for behavioural compatibility with clone()
+        s.writeInt(size);
+
+        // Write out all elements in the proper order.
+        for (int i=0; i<size; i++) {
+            s.writeObject(elementData[i]);
+        }
+
+        if (modCount != expectedModCount) {
+            throw new ConcurrentModificationException();
+        }
+    }
+```
+
