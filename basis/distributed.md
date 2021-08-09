@@ -192,3 +192,88 @@ redis的hash来存，field为ip，value为机器号。
 
 
 
+
+
+# 三、CAP
+
+## 1. 一致性模型
+
+弱一致性：DNS、Gossip
+
+强一致性：同步、Paxos、Raft、ZAB
+
+
+
+
+
+要解决什么问题： 数据不能存在单点上。
+
+
+
+### 1.1 主从同步
+
+- Master接受写请求
+- Master复制日志到slave
+- Master等待，直到所有从库返回
+
+存在问题：一个节点失败，Master阻塞，导致整个集群不可用，保证了一致性，可用性却大大降低
+
+
+
+### 1.2  多数派
+
+多数派就是说，写入大于N/2的节点，从N/2的节点中读取数据
+
+但是也解决不了并发的问题，所以顺序也是非常重要的
+
+
+
+### 1.3 Paxos
+
+#### 1.3.1 角色
+
+- Client：系统外部角色，请求发起者。像民众
+- Proposer：接受Client请求，向集群提出提议（Propose）。并在冲突发生时，起到冲突调节的作用。像议员 
+- Acceptor（Voter）：提议投票和接收者，只有在形成法定人数时，提议才会最终被接受
+- Learner：提议接受者，像记录员
+
+#### 1.3.2  步骤
+
+- Prepare ：proposer提出一个提案，编号为N，此N大于它之前提出的编码，请求acceptors的quorum接受
+- Promise：如果N大于此acceptor之前接受的任何提案编号，就接受 
+- Accept：如果达到了多数，proposer会发出accept请求，此请求包含提案编号N，以及提案内容
+- Accepted：如果此acceptor在此期间没有收到任何编号大于N的提案，则接受此提案内容
+
+
+
+#### 1.3.3 潜在问题
+
+活锁：加个随机过期时间，重新提出编号
+
+难实现，效率低：多角色，2轮RPC
+
+
+
+#### 1.3.4 Multi paxos
+
+减少角色，所有请求都先经过leader，减少一轮RPC，去掉活锁的发生
+
+![image-20210712213504594](D:\project\ReviewNotes\docs\multi-paxos.png)
+
+
+
+### 1.4 Raft
+
+简单版本的paxos
+
+#### 1.4.1 角色
+
+- Leader
+- Follower
+- Candidate
+
+#### 1.4.2 步骤
+
+- Leader Election
+- Log Replication
+- Safety
