@@ -1054,4 +1054,113 @@ func main() {
 
 
 
-4.5.1 警告：捕获迭代变量
+### 4.5.1 警告：捕获迭代变量
+
+考虑这样一个问题：你被要求首先创建一些目录，再将目录删除。在下面的例子中我们用函数值来完成删除操作。下面的示例代码需要引入os包。为了使代码简单，我们忽略了所有的异常处理
+
+```Go
+var rmdirs []func()
+for _, d := range tempDirs() {
+    dir := d // NOTE: necessary!
+    os.MkdirAll(dir, 0755) // creates parent directories too
+    rmdirs = append(rmdirs, func() {
+        os.RemoveAll(dir)
+    })
+}
+// ...do some work…
+for _, rmdir := range rmdirs {
+    rmdir() // clean up
+}
+```
+
+为什么要在循环体中用循环变量d赋值一个新的局部变量？
+
+```go
+var rmdirs []func()
+for _, dir := range tempDirs() {
+    os.MkdirAll(dir, 0755)
+    rmdirs = append(rmdirs, func() {
+        os.RemoveAll(dir) // NOTE: incorrect!
+    })
+}
+```
+
+问题的原因在于循环变量的作用域。在上面的程序中，for循环语句引入了新的词法块，循环变量dir在这个词法块中被声明。在该循环中生成的所有函数值都共享相同的循环变量。需要注意，函数值中记录的是循环变量的内存地址，而不是循环变量某一时刻的值。以dir为例，后续的迭代会不断更新dir的值，当删除操作执行时，for循环已完成，dir中存储的值等于最后一次迭代的值。这意味着，每次对os.RemoveAll的调用删除的都是相同的目录。
+
+
+
+通常，为了解决这个问题，我们会引入一个与循环变量同名的局部变量，作为循环变量的副本。比如下面的变量dir，虽然这看起来很奇怪，但却很有用
+
+
+
+
+
+## 4.6 可变参数
+
+参数数量可变的函数称为可变参数函数，在声明可变参数函数时，需要在参数列表的最后一个参数类型之前加上省略符号“...”，这表示该函数会接收任意数量的该类型参数
+
+```Go
+// 在函数体中，vals被看作是类型为[] int的切片
+// 调用者隐式的创建一个数组，并将原始参数复制到数组中，再把数组的一个切片作为参数传给被调用函数
+func sum(vals ...int) int { 
+    total := 0
+    for _, val := range vals {
+        total += val
+    }
+    return total
+}
+```
+
+
+
+如果原始参数已经是切片类型，我们该如何传递给sum？只需在最后一个参数后加上省略符
+
+```Go
+values := []int{1, 2, 3, 4}
+fmt.Println(sum(values...)) // "10"
+```
+
+
+
+可变参数函数和以切片作为参数的函数是不同的
+
+```go
+func f(...int) {}
+func g([]int) {}
+fmt.Printf("%T\n", f) // "func(...int)"
+fmt.Printf("%T\n", g) // "func([]int)"
+```
+
+
+
+可变参数函数经常被用于格式化字符串
+
+
+
+## 4.7 Deferred函数
+
+随着函数变得复杂，需要处理的错误也变多，维护清理逻辑变得越来越困难。而Go语言独有的defer机制可以让事情变得简单
+
+
+
+你只需要在调用普通函数或方法前加上关键字defer，就完成了defer所需要的语法。当执行到该条语句时，函数和参数表达式得到计算，但直到包含该defer语句的函数执行完毕时，defer后的函数才会被执行，不论包含defer语句的函数是通过return正常结束，还是由于panic导致的异常结束。你可以在一个函数中执行多条defer语句，它们的执行顺序与声明顺序相反。
+
+
+
+defer语句经常被用于处理成对的操作，如打开、关闭、连接、断开连接、加锁、释放锁。通过defer机制，不论函数逻辑多复杂，都能保证在任何执行路径下，资源被释放
+
+
+
+defer语句中的函数会在return语句更新返回值变量后再执行，又因为在函数中定义的匿名函数可以访问该函数包括返回值变量在内的所有变量，所以，对匿名函数采用defer机制，可以使其观察函数的返回值
+
+
+
+被延迟执行的匿名函数甚至可以修改函数返回给调用者的返回值：
+
+```Go
+func triple(x int) (result int) {
+    defer func() { result += x }()
+    return double(x)
+}
+fmt.Println(triple(4)) // "12"
+```
