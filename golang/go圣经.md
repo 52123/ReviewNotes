@@ -1164,3 +1164,162 @@ func triple(x int) (result int) {
 }
 fmt.Println(triple(4)) // "12"
 ```
+
+
+
+## 4.8 Panic异常
+
+Go的类型系统会在编译时捕获很多错误，但有些错误只能在运行时检查，如数组访问越界、空指针引用等。这些运行时错误会引起painc异常
+
+一般而言，当panic异常发生时，程序会中断运行，并立即执行在该goroutine中被延迟的函数（defer机制）。
+
+
+
+不是所有的panic异常都来自运行时，直接调用内置的panic函数也会引发panic异常；panic函数接受任何值作为参数。当某些不应该发生的场景发生时，我们就应该调用panic
+
+
+
+虽然Go的panic机制类似于其他语言的异常，但panic的适用场景有一些不同。由于panic会引起程序的崩溃，因此panic一般用于严重错误，如程序内部的逻辑不一致。勤奋的程序员认为任何崩溃都表明代码中存在漏洞，所以对于大部分漏洞，我们应该使用Go提供的错误机制，而不是panic，尽量避免程序的崩溃
+
+
+
+在Go的panic机制中，延迟函数的调用在释放堆栈信息之前
+
+
+
+
+
+## 4.9 Recover捕获异常
+
+通常来说，不应该对panic异常做任何处理，但有时，也许我们可以从异常中恢复，至少我们可以在程序崩溃前，做一些操作
+
+
+
+如果在deferred函数中调用了内置函数recover，并且定义该defer语句的函数发生了panic异常，recover会使程序从panic中恢复，并返回panic value。导致panic异常的函数不会继续运行，但能正常返回。在未发生panic时调用recover，recover会返回nil
+
+
+
+```Go
+func Parse(input string) (s *Syntax, err error) {
+    defer func() {
+        if p := recover(); p != nil {
+            err = fmt.Errorf("internal error: %v", p)
+        }
+    }()
+    // ...parser...
+}
+```
+
+deferred函数帮助Parse从panic中恢复。在deferred函数内部，panic value被附加到错误信息中；并用err变量接收错误信息，返回给调用者。我们也可以通过调用runtime.Stack往错误信息中添加完整的堆栈调用信息。
+
+
+
+不加区分的恢复所有的panic异常，不是可取的做法；因为在panic之后，无法保证包级变量的状态仍然和我们预期一致
+
+
+
+为了标识某个panic是否应该被恢复，我们可以将panic value设置成特殊类型。在recover时对panic value进行检查，如果发现panic value是特殊类型，就将这个panic作为error处理，如果不是，则按照正常的panic进行处理
+
+
+
+# 5. 方法
+
+一个面向对象的程序会用方法来表达其属性和对应的操作，这样使用这个对象的用户就不需要直接去操作对象，而是借助方法来做这些事情
+
+
+
+### 5.1 方法声明
+
+在函数声明时，在其名字之前放上一个变量，即是一个方法。这个附加的参数会将该函数附加到这种类型上，即相当于为这种类型定义了一个独占的方法
+
+
+
+```go
+package geometry
+
+import "math"
+
+type Point struct{ X, Y float64 }
+
+// traditional function
+func Distance(p, q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+
+// same thing, but as a method of the Point type
+func (p Point) Distance(q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+```
+
+
+
+上面的代码里那个附加的参数p，叫做方法的接收器（receiver），早期的面向对象语言留下的遗产将调用一个方法称为“向一个对象发送消息”
+
+在Go语言中，我们并不会像其它语言那样用this或者self作为接收器；我们可以任意的选择接收器的名字。由于接收器的名字经常会被使用到，所以保持其在方法间传递时的一致性和简短性是不错的主意。这里的建议是可以使用其类型的第一个字母，比如这里使用了Point的首字母p
+
+
+
+在方法调用过程中，接收器参数一般会在方法名之前出现。这和方法声明是一样的，都是接收器参数在方法名字之前
+
+```Go
+p := Point{1, 2}
+q := Point{4, 6}
+fmt.Println(Distance(p, q)) // "5", function call
+fmt.Println(p.Distance(q))  // "5", method call
+```
+
+
+
+在Go语言里，我们为一些简单的数值、字符串、slice、map来定义一些附加行为很方便。我们可以给同一个包内的任意命名类型定义方法，只要这个命名类型的底层类型不是指针或者interface
+
+
+
+### 5.2 基于指针对象的方法
+
+当调用一个函数时，会对其每一个参数值进行拷贝，如果一个函数需要更新一个变量，或者函数的其中一个参数实在太大我们希望能够避免进行这种默认的拷贝，这种情况下我们就需要用到指针了
+
+
+
+在现实的程序里，一般会约定如果Point这个类有一个指针作为接收器的方法，那么所有Point的方法都必须有一个指针接收器，即使是那些并不需要这个指针接收器的函数
+
+
+
+有类型（Point）和指向他们的指针`(*Point)`，才可能是出现在接收器声明里的两种接收器
+
+
+
+如果接收器p是一个Point类型的变量，并且其方法需要一个Point指针作为接收器。编译器会隐式地帮我们用&p去调用ScaleBy这个方法。这种简写方法只适用于“变量”，包括struct里的字段比如p.X，以及array和slice内的元素比如perim[0]。我们不能通过一个无法取到地址的接收器来调用指针方法，比如临时变量的内存地址就无法获取得到
+
+
+
+在每一个合法的方法调用表达式中，也就是下面三种情况里的任意一种情况都是可以的
+
+- 要么接收器的实际参数和其形式参数是相同的类型，比如两者都是类型T或者都是类型`*T`：
+
+  ```go
+  Point{1, 2}.Distance(q) //  Point
+  pptr.ScaleBy(2)         // *Point
+  ```
+
+- 接收器实参是类型T，但接收器形参是类型`*T`，这种情况下编译器会隐式地为我们取变量的地址：
+
+  ```go
+  p.ScaleBy(2) // implicit (&p)
+  ```
+
+- 收器实参是类型`*T`，形参是类型T。编译器会隐式地为我们解引用，取到指针指向的实际变量：
+
+  ```go
+  pptr.Distance(q) // implicit (*pptr)
+  ```
+
+
+
+1. 不管你的method的receiver是指针类型还是非指针类型，都是可以通过指针/非指针类型进行调用的，编译器会帮你做类型转换。
+2. 在声明一个method的receiver该是指针还是非指针类型时，你需要考虑两方面的因素，第一方面是这个对象本身是不是特别大，如果声明为非指针变量时，调用会产生一次拷贝；第二方面是如果你用指针类型作为receiver，那么你一定要注意，这种指针类型指向的始终是一块内存地址，就算你对其进行了拷贝
+
+
+
+### 5.2.1 Nil也是一个合法的接收器类型
+
