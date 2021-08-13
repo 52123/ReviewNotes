@@ -1228,7 +1228,7 @@ deferred函数帮助Parse从panic中恢复。在deferred函数内部，panic val
 
 
 
-### 5.1 方法声明
+## 5.1 方法声明
 
 在函数声明时，在其名字之前放上一个变量，即是一个方法。这个附加的参数会将该函数附加到这种类型上，即相当于为这种类型定义了一个独占的方法
 
@@ -1275,7 +1275,7 @@ fmt.Println(p.Distance(q))  // "5", method call
 
 
 
-### 5.2 基于指针对象的方法
+## 5.2 基于指针对象的方法
 
 当调用一个函数时，会对其每一个参数值进行拷贝，如果一个函数需要更新一个变量，或者函数的其中一个参数实在太大我们希望能够避免进行这种默认的拷贝，这种情况下我们就需要用到指针了
 
@@ -1322,4 +1322,394 @@ fmt.Println(p.Distance(q))  // "5", method call
 
 
 ### 5.2.1 Nil也是一个合法的接收器类型
+
+就像一些函数允许nil指针作为参数一样，方法理论上也可以用nil指针作为其接收器，尤其当nil对于对象来说是合法的零值时，比如map或者slice
+
+
+
+## 5.3 通过嵌入结构体来扩展方法
+
+```go
+import "image/color"
+
+type Point struct{ X, Y float64 }
+
+type ColoredPoint struct {
+    Point
+    Color color.RGBA
+}
+```
+
+内嵌可以使我们在定义ColoredPoint时得到一种句法上的简写形式，并使其包含Point类型所具有的一切字段，然后再定义一些自己的。如果我们想要的话，我们可以直接认为通过嵌入的字段就是ColoredPoint自身的字段，而完全不需要在调用时指出Point
+
+```go
+var cp ColoredPoint
+cp.X = 1
+fmt.Println(cp.Point.X) // "1"
+cp.Point.Y = 2
+fmt.Println(cp.Y) // "2"
+```
+
+
+
+Point类的方法也被引入了ColoredPoint。用这种方式，内嵌可以使我们定义字段特别多的复杂类型，我们可以将字段先按小类型分组，然后定义小类型的方法，之后再把它们组合起来
+
+
+
+```go
+var cache = struct {
+    sync.Mutex
+    mapping map[string]string
+}{
+    mapping: make(map[string]string),
+}
+
+
+func Lookup(key string) string {
+    cache.Lock()
+    v := cache.mapping[key]
+    cache.Unlock()
+    return v
+}
+```
+
+
+
+## 5.4 方法值和方法表达式
+
+我们经常选择一个方法，并且在同一个表达式里执行，比如常见的p.Distance()形式，实际上将其分成两步来执行也是可能的。p.Distance叫作“选择器”，选择器会返回一个方法“值”->一个将方法（Point.Distance）绑定到特定接收器变量的函数。这个函数可以不通过指定其接收器即可被调用；即调用时不需要指定接收器
+
+```go
+p := Point{1, 2}
+q := Point{4, 6}
+
+distanceFromP := p.Distance        // method value
+fmt.Println(distanceFromP(q))      // "5"
+var origin Point                   // {0, 0}
+fmt.Println(distanceFromP(origin)) // "2.23606797749979", sqrt(5)
+
+scaleP := p.ScaleBy // method value
+scaleP(2)           // p becomes (2, 4)
+scaleP(3)           //      then (6, 12)
+scaleP(10)          //      then (60, 120)
+```
+
+
+
+
+
+在一个包的API需要一个函数值、且调用方希望操作的是某一个绑定了对象的方法的话，方法“值”会非常实用
+
+```go
+type Rocket struct { /* ... */ }
+func (r *Rocket) Launch() { /* ... */ }
+r := new(Rocket)
+// time.AfterFunc(10 * time.Second, func() { r.Launch() })
+time.AfterFunc(10 * time.Second, r.Launch)
+```
+
+
+
+
+
+当T是一个类型时，方法表达式可能会写作`T.f`或者`(*T).f`，会返回一个函数“值”，这种函数会将其第一个参数用作接收器，所以可以用通常（译注：不写选择器）的方式来对其进行调用：
+
+```go
+p := Point{1, 2}
+q := Point{4, 6}
+
+distance := Point.Distance   // method expression
+fmt.Println(distance(p, q))  // "5"
+fmt.Printf("%T\n", distance) // "func(Point, Point) float64"
+
+scale := (*Point).ScaleBy
+scale(&p, 2)
+fmt.Println(p)            // "{2 4}"
+fmt.Printf("%T\n", scale) // "func(*Point, float64)"
+
+// 译注：这个Distance实际上是指定了Point对象为接收器的一个方法func (p Point) Distance()，
+// 但通过Point.Distance得到的函数需要比实际的Distance方法多一个参数，
+// 即其需要用第一个额外参数指定接收器，后面排列Distance方法的参数。
+// 看起来本书中函数和方法的区别是指有没有接收器，而不像其他语言那样是指有没有返回值。
+```
+
+
+
+
+
+当你根据一个变量来决定调用同一个类型的哪个函数时，方法表达式就显得很有用了。你可以根据选择来调用接收器各不相同的方法
+
+```go
+type Point struct{ X, Y float64 }
+
+func (p Point) Add(q Point) Point { return Point{p.X + q.X, p.Y + q.Y} }
+func (p Point) Sub(q Point) Point { return Point{p.X - q.X, p.Y - q.Y} }
+
+type Path []Point
+
+func (path Path) TranslateBy(offset Point, add bool) {
+    var op func(p, q Point) Point
+    if add {
+        op = Point.Add
+    } else {
+        op = Point.Sub
+    }
+    for i := range path {
+        // Call either path[i].Add(offset) or path[i].Sub(offset).
+        path[i] = op(path[i], offset)
+    }
+}
+```
+
+
+
+## 5.5 封装
+
+一个对象的变量或者方法如果对调用方是不可见的话，一般就被定义为“封装”。封装有时候也被叫做信息隐藏，同时也是面向对象编程最关键的一个方面。
+
+- 调用方不能直接修改变量，其只需要关注少量的语句和弄懂少量的变量
+- 隐藏实现细节，可以防止调用方依赖那些可能变化的具体实现
+- 阻止了外部调用方对对象内部的值任意地进行修改，因为对象内部变量只可以被同一个包内的函数修改，所以包的作者可以让这些函数确保对象内部的一些值的不变性
+
+
+
+Go语言只有一种控制可见性的手段：大写首字母的标识符会从定义它们的包中被导出，小写字母的则不会
+
+这种限制包内成员的方式同样适用于struct或者一个类型的方法。因而如果我们想要封装一个对象，我们必须将其定义为一个struct
+
+一个struct类型的字段对同一个包的所有代码都有可见性，无论你的代码是写在一个函数还是一个方法里
+
+
+
+
+
+# 6. 接口
+
+接口类型是对其它类型行为的抽象和概括；因为接口类型不会和特定的实现细节绑定在一起，通过这种抽象的方式我们可以让我们的函数更加灵活和更具有适应能力。
+
+
+
+Go语言中接口类型的独特之处在于它是满足隐式实现的。我们没有必要对于给定的具体类型定义所有满足的接口类型；简单地拥有一些必需的方法就足够了
+
+
+
+## 6.1 接口约定
+
+接口类型。接口类型是一种抽象的类型。它不会暴露出它所代表的对象的内部值的结构和这个对象支持的基础操作的集合；它们只会表现出它们自己的方法。也就是说当你有看到一个接口类型的值时，你不知道它是什么，唯一知道的就是可以通过它的方法来做什么。
+
+
+
+## 6.2 接口类型
+
+接口类型具体描述了一系列方法的集合，一个实现了这些方法的具体类型是这个接口类型的实例。
+
+
+
+```go
+package io
+type Reader interface {
+    Read(p []byte) (n int, err error)
+}
+type Closer interface {
+    Close() error
+}
+```
+
+再往下看，我们发现有些新的接口类型通过组合已有的接口来定义。下面是两个例子：
+
+```go
+type ReadWriter interface {
+    Reader
+    Writer
+}
+type ReadWriteCloser interface {
+    Reader
+    Writer
+    Closer
+}
+```
+
+
+
+## 6.3 实现接口的条件
+
+一个类型如果拥有一个接口需要的所有方法，那么这个类型就实现了这个接口
+
+
+
+interface{}被称为空接口类型是不可或缺的。因为空接口类型对实现它的类型没有要求，所以我们可以将任意一个值赋给空接口类型。
+
+对于创建的一个interface{}值持有一个boolean，float，string，map，pointer，或者任意其它的类型；我们当然不能直接对它持有的值做操作，因为interface{}没有任何方法
+
+
+
+因为接口与实现只依赖于判断两个类型的方法，所以没有必要定义一个具体类型和它实现的接口之间的关系。也就是说，有意地在文档里说明或者程序上断言这种关系偶尔是有用的，但程序上不强制这么做。下面的定义在编译期断言一个`*bytes.Buffer`的值实现了io.Writer接口类型:
+
+```go
+// *bytes.Buffer must satisfy io.Writer
+var w io.Writer = new(bytes.Buffer)
+```
+
+因为任意`*bytes.Buffer`的值，甚至包括nil通过`(*bytes.Buffer)(nil)`进行显示的转换都实现了这个接口，所以我们不必分配一个新的变量。并且因为我们绝不会引用变量w，我们可以使用空标识符来进行代替。总的看，这些变化可以让我们得到一个更朴素的版本：
+
+```go
+// *bytes.Buffer must satisfy io.Writer
+var _ io.Writer = (*bytes.Buffer)(nil)
+```
+
+
+
+
+
+每一个具体类型的组基于它们相同的行为可以表示成一个接口类型。不像基于类的语言，他们一个类实现的接口集合需要进行显式的定义，在Go语言中我们可以在需要的时候定义一个新的抽象或者特定特点的组，而不需要修改具体类型的定义。当具体的类型来自不同的作者时这种方式会特别有用。当然也确实没有必要在具体的类型中指出这些共性
+
+
+
+## 6.4 接口值
+
+一个接口的值，接口值，由两个部分组成，一个具体的类型和那个类型的值。它们被称为接口的动态类型和动态值
+
+对于像Go语言这种静态类型的语言，类型是编译期的概念；因此一个类型不是一个值。在我们的概念模型中，一些提供每个类型信息的值被称为类型描述符，比如类型的名称和方法。在一个接口值中，类型部分代表与之相关类型的描述符。
+
+
+
+下面4个语句中，变量w得到了3个不同的值。（开始和最后的值是相同的）
+
+```go
+var w io.Writer
+w = os.Stdout
+w = new(bytes.Buffer)
+w = nil
+```
+
+
+
+在Go语言中，变量总是被一个定义明确的值初始化，即使接口类型也不例外。对于一个接口的零值就是它的类型和值的部分都是nil（图7.1）。
+
+![img](https://books.studygolang.com/gopl-zh/images/ch7-01.png)
+
+一个接口值基于它的动态类型被描述为空或非空，所以这是一个空的接口值。你可以通过使用w==nil或者w!=nil来判断接口值是否为空
+
+
+
+第二个语句将一个`*os.File`类型的值赋给变量w:
+
+```go
+w = os.Stdout
+```
+
+这个赋值过程调用了一个具体类型到接口类型的隐式转换，这和显式的使用io.Writer(os.Stdout)是等价的。这类转换不管是显式的还是隐式的，都会刻画出操作到的类型和值。这个接口值的动态类型被设为`*os.File`指针的类型描述符，它的动态值持有os.Stdout的拷贝；这是一个代表处理标准输出的os.File类型变量的指针（图7.2）。
+
+![img](https://books.studygolang.com/gopl-zh/images/ch7-02.png)
+
+调用一个包含`*os.File`类型指针的接口值的Write方法，使得`(*os.File).Write`方法被调用。
+
+
+
+
+
+通常在编译期，我们不知道接口值的动态类型是什么，所以一个接口上的调用必须使用动态分配。因为不是直接进行调用，所以编译器必须把代码生成在类型描述符的方法Write上，然后间接调用那个地址。这个调用的接收者是一个接口动态值的拷贝，os.Stdout。效果和下面这个直接调用一样：
+
+```go
+os.Stdout.Write([]byte("hello")) // "hello"
+```
+
+
+
+第三个语句给接口值赋了一个*bytes.Buffer类型的值
+
+```go
+w = new(bytes.Buffer)
+```
+
+现在动态类型是*bytes.Buffer并且动态值是一个指向新分配的缓冲区的指针（图7.3）。
+
+![img](https://books.studygolang.com/gopl-zh/images/ch7-03.png)
+
+这次类型描述符是*bytes.Buffer，所以调用了(*bytes.Buffer).Write方法，并且接收者是该缓冲区的地址。这个调用把字符串“hello”添加到缓冲区中。
+
+
+
+
+
+
+
+
+
+
+
+一个接口值可以持有任意大的动态值。从概念上讲，不论接口值多大，动态值总是可以容下它。（这只是一个概念上的模型；具体的实现可能会非常不同）
+
+![img](https://books.studygolang.com/gopl-zh/images/ch7-04.png)
+
+接口值可以使用==和!＝来进行比较。两个接口值相等仅当它们都是nil值，或者它们的动态类型相同并且动态值也根据这个动态类型的==操作相等。因为接口值是可比较的，所以它们可以用在map的键或者作为switch语句的操作数
+
+接口类型是非常与众不同的。其它类型要么是安全的可比较类型（如基本类型和指针）要么是完全不可比较的类型（如切片，映射类型，和函数），但是在比较接口值或者包含了接口值的聚合类型时，我们必须要意识到潜在的panic。同样的风险也存在于使用接口作为map的键或者switch的操作数。只能比较你非常确定它们的动态值是可比较类型的接口值
+
+
+
+
+
+### 6.4.1 一个包含nil指针的接口不是nil接口
+
+一个不包含任何值的nil接口值和一个刚好包含nil指针的接口值是不同的。这个细微区别产生了一个容易绊倒每个Go程序员的陷阱。
+
+```go
+const debug = true
+
+func main() {
+    var buf *bytes.Buffer
+    if debug {
+        buf = new(bytes.Buffer) // enable collection of output
+    }
+    f(buf) // NOTE: subtly incorrect!
+    if debug {
+        // ...use buf...
+    }
+}
+
+// If out is non-nil, output will be written to it.
+func f(out io.Writer) {
+    // ...do something...
+    if out != nil {
+        out.Write([]byte("done!\n")) // when debug is false -- panic: nil pointer dereference
+    }
+}
+```
+
+当main函数调用函数f时，它给f函数的out参数赋了一个*bytes.Buffer的空指针，所以out的动态值是nil。然而，它的动态类型是*bytes.Buffer，意思就是out变量是一个包含空指针值的非空接口（如图7.5），所以防御性检查out!=nil的结果依然是true。
+
+![img](https://books.studygolang.com/gopl-zh/images/ch7-05.png)
+
+解决方案就是将main函数中的变量buf的类型改为io.Writer，因此可以避免一开始就将一个不完整的值赋值给这个接口
+
+
+
+## 6.5 error接口
+
+实际上它就是interface类型，这个类型有一个返回错误信息的单一方法
+
+```go
+type error interface {
+    Error() string
+}
+```
+
+
+
+errors包仅只有4行：
+
+```go
+package errors
+
+func New(text string) error { return &errorString{text} }
+
+type errorString struct { text string }
+
+func (e *errorString) Error() string { return e.text }
+```
+
+
+
+承载errorString的类型是一个结构体而非一个字符串，这是为了保护它表示的错误避免粗心（或有意）的更新。并且因为是指针类型`*errorString`满足error接口而非errorString类型，所以每个New函数的调用都分配了一个独特的和其他错误不相同的实例
 
