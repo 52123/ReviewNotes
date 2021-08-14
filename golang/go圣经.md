@@ -1713,3 +1713,160 @@ func (e *errorString) Error() string { return e.text }
 
 承载errorString的类型是一个结构体而非一个字符串，这是为了保护它表示的错误避免粗心（或有意）的更新。并且因为是指针类型`*errorString`满足error接口而非errorString类型，所以每个New函数的调用都分配了一个独特的和其他错误不相同的实例
 
+
+
+
+
+
+
+## 6.6 类型断言
+
+类型断言是一个使用在接口值上的操作。语法上它看起来像x.(T)被称为断言类型，这里x表示一个接口的类型和T表示一个类型。
+
+一个类型断言检查它操作对象的动态类型是否和断言的类型匹配
+
+
+
+- 断言的类型T是一个具体类型，然后类型断言检查x的动态类型是否和T相同
+
+  - ```go
+    var w io.Writer
+    w = os.Stdout
+    f := w.(*os.File)      // success: f == os.Stdout
+    c := w.(*bytes.Buffer) // panic: interface holds *os.File, not *bytes.Buffer
+    ```
+
+- 断言类型T是一个接口类型，然后类型断言检查是否x的动态类型满足T。换句话说，对一个接口类型的类型断言改变了类型的表述方式，改变了可以获取的方法集合（通常更大），但是它保留了接口值内部的动态类型和值的部分
+
+
+
+
+
+经常地，对一个接口值的动态类型我们是不确定的，并且我们更愿意去检验它是否是一些特定的类型。如果类型断言出现在一个预期有两个结果的赋值操作中，例如如下的定义，这个操作不会在失败的时候发生panic，但是替代地返回一个额外的第二个结果，这个结果是一个标识成功与否的布尔值：
+
+```go
+var w io.Writer = os.Stdout
+f, ok := w.(*os.File)      // success:  ok, f == os.Stdout
+b, ok := w.(*bytes.Buffer) // failure: !ok, b == nil
+```
+
+
+
+
+
+## 6.7 基于类型断言区别错误类型
+
+思考在os包中文件操作返回的错误集合。I/O可以因为任何数量的原因失败，但是有三种经常的错误必须进行不同的处理：文件已经存在（对于创建操作），找不到文件（对于读取操作），和权限拒绝。os包中提供了三个帮助函数来对给定的错误值表示的失败进行分类：
+
+```go
+package os
+
+func IsExist(err error) bool
+func IsNotExist(err error) bool
+func IsPermission(err error) bool
+```
+
+
+
+下面这里是它的实际使用：
+
+```go
+_, err := os.Open("/no/such/file")
+fmt.Println(os.IsNotExist(err)) // "true"
+```
+
+
+
+
+
+## 6.8 通过类型断言查询接口
+
+```go
+// writeString writes s to w.
+// If w has a WriteString method, it is invoked instead of w.Write.
+func writeString(w io.Writer, s string) (n int, err error) {
+    type stringWriter interface {
+        WriteString(string) (n int, err error)
+    }
+    if sw, ok := w.(stringWriter); ok {
+        return sw.WriteString(s) // avoid a copy
+    }
+    return w.Write([]byte(s)) // allocate temporary copy
+}
+
+func writeHeader(w io.Writer, contentType string) error {
+    if _, err := writeString(w, "Content-Type: "); err != nil {
+        return err
+    }
+    if _, err := writeString(w, contentType); err != nil {
+        return err
+    }
+    // ...
+}
+```
+
+这个例子的神奇之处在于，没有定义了WriteString方法的标准接口，也没有指定它是一个所需行为的标准接口。一个具体类型只会通过它的方法决定它是否满足stringWriter接口，而不是任何它和这个接口类型所表达的关系。它的意思就是上面的技术依赖于一个假设，这个假设就是：如果一个类型满足下面的这个接口，然后WriteString(s)方法就必须和Write([]byte(s))有相同的效果。
+
+
+
+## 6.9 类型分支
+
+接口被以两种不同的方式使用
+
+- 第一个方式中，以io.Reader，io.Writer，fmt.Stringer，sort.Interface，http.Handler和error为典型，一个接口的方法表达了实现这个接口的具体类型间的相似性，但是隐藏了代码的细节和这些具体类型本身的操作。重点在于方法上，而不是具体的类型上
+- 利用一个接口值可以持有各种具体类型值的能力，将这个接口认为是这些类型的联合。类型断言用来动态地区别这些类型，使得对每一种情况都不一样。在这个方式中，重点在于具体的类型满足这个接口，而不在于接口的方法（如果它确实有一些的话），并且没有任何的信息隐藏。我们将以这种方式使用的接口描述为discriminated unions（可辨识联合）
+
+```go
+switch x.(type) {
+case nil:       // ...
+case int, uint: // ...
+case bool:      // ...
+case string:    // ...
+default:        // ...
+}
+```
+
+
+
+
+
+## 6.10 一些建议
+
+当设计一个新的包时，新手Go程序员总是先创建一套接口，然后再定义一些满足它们的具体类型。这种方式的结果就是有很多的接口，它们中的每一个仅只有一个实现。不要再这么做了。这种接口是不必要的抽象；它们也有一个运行时损耗。你可以使用导出机制（§6.6）来限制一个类型的方法或一个结构体的字段是否在包外可见。接口只有当有两个或两个以上的具体类型必须以相同的方式进行处理时才需要。
+
+当一个接口只被一个单一的具体类型实现时有一个例外，就是由于它的依赖，这个具体类型不能和这个接口存在在一个相同的包中。这种情况下，一个接口是解耦这两个包的一个好方式。
+
+因为在Go语言中只有当两个或更多的类型实现一个接口时才使用接口，它们必定会从任意特定的实现细节中抽象出来。结果就是有更少和更简单方法的更小的接口（经常和io.Writer或 fmt.Stringer一样只有一个）。当新的类型出现时，小的接口更容易满足。对于接口设计的一个好的标准就是 ask only for what you need（只考虑你需要的东西）
+
+我们完成了对方法和接口的学习过程。Go语言对面向对象风格的编程支持良好，但这并不意味着你只能使用这一风格。不是任何事物都需要被当做一个对象；独立的函数有它们自己的用处，未封装的数据类型也是这样。观察一下，在本书前五章的例子中像input.Scan这样的方法被调用不超过二十次，与之相反的是普遍调用的函数如fmt.Printf。
+
+
+
+
+
+# 7. Goroutines和Channels
+
+Go语言中的并发程序可以用两种手段来实现。本章讲解goroutine和channel，其支持“顺序通信进程”（communicating sequential processes）或被简称为CSP
+
+
+
+
+
+## 7.1 Goroutines
+
+在Go语言中，每一个并发的执行单元叫作一个goroutine
+
+
+
+当一个程序启动时，其主函数即在一个单独的goroutine中运行，我们叫它main goroutine。新的goroutine会用go语句来创建。在语法上，go语句是一个普通的函数或方法调用前加上关键字go。go语句会使其语句中的函数在一个新创建的goroutine中运行。而go语句本身会迅速地完成
+
+```go
+f()    // call f(); wait for it to return
+go f() // create a new goroutine that calls f(); don't wait
+```
+
+
+
+
+
+主函数返回时，所有的goroutine都会被直接打断，程序退出。除了从主函数退出或者直接终止程序之外，没有其它的编程方法能够让一个goroutine来打断另一个的执行，但是之后可以看到一种方式来实现这个目的，通过goroutine之间的通信来让一个goroutine请求其它的goroutine，并让被请求的goroutine自行结束执行
