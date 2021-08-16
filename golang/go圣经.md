@@ -2091,3 +2091,71 @@ Go语言并没有提供在一个goroutine中终止另一个goroutine的方法，
 
 
 广播机制：不要向channel发送值，而是用关闭一个channel来进行广播
+
+
+
+
+
+# 8. 基于共享变量的并发
+
+
+
+## 8.1 竞争条件
+
+竞争条件指的是程序在多个goroutine交叉执行操作时，没有给出正确的结果
+
+
+
+一般情况下我们没法去知道分别位于两个goroutine的事件x和y的执行顺序，x是在y之前还是之后还是同时发生是没法判断的。当我们没有办法自信地确认一个事件是在另一个事件的前面或者后面发生的话，就说明x和y这两个事件是并发的
+
+
+
+数据竞争会在两个以上的goroutine并发访问相同的变量且至少其中一个为写操作时发生
+
+有三种方式可以避免数据竞争：
+
+- 不要去写变量
+- 避免从多个goroutine访问变量
+  - 由于其它的goroutine不能够直接访问变量，它们只能使用一个channel来发送请求给指定的goroutine来查询更新变量。这也就是Go的口头禅“不要使用共享数据来通信；使用通信来共享数据”
+  - 一个提供对一个指定的变量通过channel来请求的goroutine叫做这个变量的monitor（监控）goroutine
+- 避免数据竞争的方法是允许很多goroutine去访问变量，但是在同一个时刻最多只有一个goroutine在访问。这种方式被称为“互斥”
+
+
+
+## 8.2 sync.Mutex互斥锁
+
+我们使用了一个buffered channel作为一个计数信号量，来保证最多只有20个goroutine会同时执行HTTP请求。同理，我们可以用一个容量只有1的channel来保证最多只有一个goroutine在同一时刻访问一个共享变量。一个只能为1和0的信号量叫做二元信号量
+
+```go
+var (
+    sema    = make(chan struct{}, 1) // a binary semaphore guarding balance
+    balance int
+)
+
+func Deposit(amount int) {
+    sema <- struct{}{} // acquire token
+    balance = balance + amount
+    <-sema // release token
+}
+
+func Balance() int {
+    sema <- struct{}{} // acquire token
+    b := balance
+    <-sema // release token
+    return b
+}
+```
+
+
+
+
+
+每次一个goroutine访问bank变量时（这里只有balance余额变量），它都会调用mutex的Lock方法来获取一个互斥锁。如果其它的goroutine已经获得了这个锁的话，这个操作会被阻塞直到其它goroutine调用了Unlock使该锁变回可用状态。mutex会保护共享变量。惯例来说，被mutex所保护的变量是在mutex变量声明之后立刻声明的
+
+
+
+
+
+**go里没有重入锁**
+
+原因：mutex的目的是确保共享变量在程序执行时的关键点上能够保证不变性。不变性的一层含义是“没有goroutine访问共享变量”，但实际上这里对于mutex保护的变量来说，不变性还包含更深层含义：当一个goroutine获得了一个互斥锁时，它能断定被互斥锁保护的变量正处于不变状态（译注：即没有其他代码块正在读写共享变量），在其获取并保持锁期间，可能会去更新共享变量，这样不变性只是短暂地被破坏，然而当其释放锁之后，锁必须保证共享变量重获不变性并且多个goroutine按顺序访问共享变量。尽管一个可以重入的mutex也可以保证没有其它的goroutine在访问共享变量，但它不具备不变性更深层含义
