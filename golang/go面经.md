@@ -127,5 +127,54 @@ var str = "go算法"
 
 
 
+
+
 ## 1.6 map不初始化使用会怎样
 
+可以对未初始化的map进行取值，但取出来的东西是空
+
+不能对未初始化的map进行赋值，这样将会抛出一个异常：panic: assignment to entry in nil map
+
+
+
+## 1.7 map不初始化长度和初始化长度的区别
+
+空map和nil map结果是一样的，都为map[]
+
+
+
+
+
+## 1.8 map的参数初始值，扩容机制
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- new和make的区别
+- GC内存管理机制
+- 函数传值传啥会更好
+  - 传指针，逃逸
+- 线程有几种模型，Goroutine的原理，实现，优缺势
+- Goroutine什么时候发生阻塞
+- PMG模型中Goroutine有哪几种状态？线程呢
+- 每个线程/协程占用多少内存
+- 如果Goroutine一直占用资源怎么办，PMG模型如何解决这个问题
+- 如果若干线程中一个线程OOM，会发生什么？如果是Goroutine呢？项目中出现过OOM吗？怎么解决的
+- defer可以捕获到其Goroutine的子Goroutine的panic吗
+- Gin的错误处理使用过吗？Gin中自定义校验规则知道是怎么做的吗，自定义校验返回值呢
+- 反射了解过吗?反射的原理
+- golang的锁机制。Mutex锁有哪几种模式。Mutex底层如何实现。Mutex业务场景
+- channel业务场景。需要注意的地方
