@@ -2981,3 +2981,97 @@ func main() {
 5. G拥有栈，M根据G中的栈信息和调度信息设置运行环境
 6. M运行G
 7. G退出，再次回到M获取可运行的G，这样重复下去，直到`main.main`退出，`runtime.main`执行Defer和Panic处理，或调用`runtime.exit`退出程序。
+
+
+
+## 13.7 GPM可视化编程
+
+
+
+### 13.7.1 go tool trace
+
+trace记录了运行时的信息，能提供可视化的Web页面
+
+```go
+package main
+
+import (
+    "os"
+    "fmt"
+    "runtime/trace"
+)
+
+func main() {
+
+    //创建trace文件
+    f, err := os.Create("trace.out")
+    if err != nil {
+        panic(err)
+    }
+
+    defer f.Close()
+
+    //启动trace goroutine
+    err = trace.Start(f)
+    if err != nil {
+        panic(err)
+    }
+    defer trace.Stop()
+
+    //main
+    fmt.Println("Hello World")
+}
+```
+
+运行程序
+
+```go
+$ go run trace.go 
+Hello World
+```
+
+得到一个trace.out文件，用go tool打开
+
+```go
+$ go tool trace trace.out 
+```
+
+
+
+### 13.7.2 Debug trace
+
+编译
+
+```go
+$ go build trace2.go
+```
+
+通过Debug方式运行
+
+```go
+$ GODEBUG=schedtrace=1000 ./trace2 
+SCHED 0ms: gomaxprocs=2 idleprocs=0 threads=4 spinningthreads=1 idlethreads=1 runqueue=0 [0 0]
+Hello World
+SCHED 1003ms: gomaxprocs=2 idleprocs=2 threads=4 spinningthreads=0 idlethreads=2 runqueue=0 [0 0]
+Hello World
+SCHED 2014ms: gomaxprocs=2 idleprocs=2 threads=4 spinningthreads=0 idlethreads=2 runqueue=0 [0 0]
+Hello World
+SCHED 3015ms: gomaxprocs=2 idleprocs=2 threads=4 spinningthreads=0 idlethreads=2 runqueue=0 [0 0]
+Hello World
+SCHED 4023ms: gomaxprocs=2 idleprocs=2 threads=4 spinningthreads=0 idlethreads=2 runqueue=0 [0 0]
+Hello World
+```
+
+- `SCHED`：调试信息输出标志字符串，代表本行是goroutine调度器的输出；
+- `0ms`：即从程序启动到输出这行日志的时间；
+- `gomaxprocs`: P的数量，本例有2个P, 因为默认的P的属性是和cpu核心数量默认一致，当然也可以通过GOMAXPROCS来设置；
+- `idleprocs`: 处于idle状态的P的数量；通过gomaxprocs和idleprocs的差值，我们就可知道执行go代码的P的数量；
+- `threads: os threads/M`的数量，包含scheduler使用的m数量，加上runtime自用的类似sysmon这样的thread的数量；
+- `spinningthreads`: 处于自旋状态的os thread数量；
+- `idlethread`: 处于idle状态的os thread的数量；
+- `runqueue=0`： Scheduler全局队列中G的数量；
+- `[0 0]`: 分别为2个P的local queue中的G的数量。
+
+
+
+## 13.8 Go调度器调度场景全解析
