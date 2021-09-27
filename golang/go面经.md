@@ -159,6 +159,8 @@ var str = "go算法"
 
 ## 2.1 new和make的区别
 
+https://golang.org/doc/effective_go#allocation_new
+
 Go语言中 new 和 make 是两个内置函数，**主要用来创建并分配类型的内存**
 
 Go语言中的 new 和 make 主要区别如下：
@@ -179,6 +181,10 @@ func new(Type) *Type
 ```
 
 new 函数只接受一个参数，这个参数是一个类型，并且返回一个指向该类型内存地址的指针。同时 new 函数会把分配的内存置为零，也就是类型的零值。
+
+
+
+if a composite literal contains no fields at all, it creates a zero value for the type. The expressions `new(File)` and `&File{}` are equivalent
 
 
 
@@ -206,7 +212,7 @@ make 也是用于内存分配的，但是和 new 不同，它只用于 chan、ma
 func make(t Type, size ...IntegerType) Type
 ```
 
-
+The reason for the distinction is that these three types represent, under the covers, references to data structures that must be initialized before use
 
 ### 2.1.3 make实现原理
 
