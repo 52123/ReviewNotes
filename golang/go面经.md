@@ -151,9 +151,43 @@ var str = "go算法"
 
 
 
+## 1.9 结构体能不能比较
+
+### 1.9.1 可比较的数据类型
+
+```go
+Integer
+Floating-point
+String
+bool
+Complex
+Pointer
+Channel
+Interface
+Array
+```
+
+### 1.9.2 不可比较的数据类型
+
+Slice、Map、Function
+
+为什么不可以比较
 
 
-# 2.
+
+### 1.9.3 同一个struct的两个实例能不能比较
+
+使用== ：当结构体内所有成员变量都可以比较的时候，那么就可以比较
+
+使用DeepEqual:  对含有不可直接比较的成员变量时，可以用DeepEqual进行比较
+
+
+
+### 1.9.4 两个不同的struct的实例能不能比较
+
+可以通过强制转换来比较
+
+如果成员变量中含有不可比较成员变量，即使可以强制转换，也不可以比较
 
 
 
