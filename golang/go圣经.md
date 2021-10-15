@@ -3370,3 +3370,27 @@ func main() {
 
 
 
+
+
+
+
+
+
+## 14. Context
+
+主要作用：**在多个Goroutine组成的树中同步取消信号以减少对资源的消耗和占用**
+
+
+
+当最上层的 Goroutine 因为某些原因执行失败时，下层的 Goroutine 由于没有接收到这个信号所以会继续工作；但是当我们正确地使用 [`context.Context`](https://draveness.me/golang/tree/context.Context) 时，就可以在下层及时停掉无用的工作以减少额外资源的消耗
+
+
+
+### 14.1 含有的方法
+
+- Deadline：返回context.Context被取消的时间，也就是完成工作的截止日期
+- Done：返回一个Channel，这个channel会在当前工作完成或者上下文被取消后关闭
+- Err：返回context.Context结束的原因，它只会在Done方法对应的Channel关闭时返回非空的值
+  - context.Context被取消，会返回Canceled错误
+  - context.Context超时，会返回DeadlineExceeded错误
+- Value：从context.Context中获取键对应的值
