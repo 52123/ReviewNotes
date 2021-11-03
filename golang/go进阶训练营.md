@@ -309,3 +309,216 @@ L0服务，类似账号服务，一旦故障影响返回巨大，所以多集群
 
 
 
+#### **解决方法**
+
+染色发布。
+
+- 流量路由：能够基于流入栈中的流量类型叫做路由
+- 隔离性：能够可靠的隔离测试和生产中的资源，保证对关键业务没有副作用
+
+本质：跨服务传递请求携带上下文，数据隔离的流量路由法案
+
+
+
+#### 全链路压测
+
+传入上下文，跨服务使用metadata传递，每一个基础架构都能理解租户信息，并且能够基于组合路由隔离流量
+
+网关：根据染色路由到指定的容器
+
+redis: 根据染色，在同一个节点复制不同的db或者key，作为影子数据库
+
+mysql：根据ddl自动复制出另一个影子mysql
+
+数据准备：自己造，或者录制流量
+
+
+
+
+
+
+
+# 二、error
+
+
+
+## 2.1 Error vs Exception
+
+
+
+### 2.1.1 Error
+
+error就是普通的一个接口，普通的值
+
+通常试用`errors.New`来返回一个error对象
+
+
+
+Go的异常处理逻辑是不引入exception，在函数签名上实现error interface的对象
+
+
+
+**Go的panic机制跟其他语言的exception不一样**
+
+panic意味着fatal error，意味着代码不能继续运行，跟error差不多，表示不可恢复的程序错误
+
+
+
+### 2.1.2 Error的好处
+
+- 简单
+- 考虑失败，而不是成功
+- 没有隐藏的控制流
+- 完全交给你来控制error
+- Error are values
+
+
+
+## 2.2 Error types
+
+### 2.2.1 Sentinel Error
+
+预定义的特定错误，我们称为sentinel error
+
+```if err == ErrSometing{...}```
+
+- **使用sentinel是最不灵活的错误处理策略**，返回不同的错误将破坏相等性检查
+- 会在不同的包之间创建依赖
+
+不依赖检查error.Error的输出
+
+
+
+### 2.2.2 Error types
+
+Error types是实现了error接口的自定义类型，能提供更多的上下文
+
+- 会跟调用者产生强耦合，导致API变得脆弱。 因为需要用switch，并让自定义的error变为public
+- 共享error values许多相同的问题，避免使用或者作为公共API的一部分
+
+
+
+### 2.2.3 Opaque errors
+
+最灵活的错误处理策略，与调用者之间的耦合最少。（不透明错误处理，秩序返回错误而不假设其内容）
+
+Assert errors for behaviour，not type
+
+- 少数情况下，二分错误处理方法是不够的，例如是否需要判断重试
+- 通过断言错误是否实现了特定的行为来实现，而不是断言错误是特定的类型或值
+- 可以不引入定义错误的包或者实际上不了解err的底层类型的情况下实现
+
+
+
+## 2.3 Handling error
+
+
+
+### 2.3.1 Eliminate error handling by eliminating errors
+
+定义：
+
+```go
+type errWriter struct {
+    io.Writer
+    err error
+}
+
+func (e *errWriter) Write(buf []byte) (int, error) {
+    if e.err != nil {
+        return 0, e.err
+    }
+    
+    var n int
+    n, e.err = e.Writer.Write(buf)
+    return n, nil
+}
+```
+
+使用：
+
+```go
+func WriteResponse(w io.Writer, st Status, headers []Header, body io.Reader) error {
+    ew := &errWriter{Writer: w}
+    
+    for _, h := range headers {
+        fmt.Fprintf(ew, "%s: %s\r\n", h.Key, h.Value)
+    }
+    
+    fmt.Fprint(ew, "\r\n")
+    io.Copy(ew, body)
+    return ew.err
+}
+```
+
+
+
+### 2.3.2 Wrap errors
+
+```go
+func AuthenticateRequest(r *Request) error {
+    return authenticate(r.User)
+}
+```
+
+- 没有生成错误得file:line信息
+- 没有导致错误得调用堆栈的堆栈信息
+
+```go
+func AuthenticateRequest(r *Request) error {
+    err := authenticatre(r.User)
+    if err != nil {
+        return fmt.Errorf("authenticate failed:%v", err)
+    }
+    return nil
+}
+```
+
+- 与sentinel errors或type assertions的使用不兼容
+- fmt.Errorf波坏了原始错误，导致等值判定失败
+- 记录多个错误，一直返回到程序的顶部
+
+ 
+
+you should only handle errors once. Hadnling an error means inspecting the error value, and making a single decision
+
+
+
+日志记录与错误无关且对调试没有邦族的信息应被视为噪音。
+
+记录的原因是因为某些东西失败了，而日志包含了答案
+
+- 错误要被日志记录
+- 应用程序处理错误，保证100%完整性
+- 之后不再报告当前错误
+
+
+
+#### github.com/pkg/errors
+
+```go
+```
+
+
+
+
+
+- 在你的应用代码中，试用errorsNew或者errors.Errorf返回错误
+- 如果调用其他包内的函数，通常简单的直接返回（不然会有两倍日志）
+- 如果和其他库进行协作，考虑试用errors.Wrap或者errors.Wrapf保存堆栈信息
+- 直接返回错误，而不是到处打日志
+- 在程序的顶部或者是工作的goroutine顶部（请求入口），使用%+v把堆栈详情记录
+- 使用errors.Cause获取root error，再跟sentinel error判定
+
+#### 总结
+
+- Packages that are reusable across many projects only return root error values
+- If the error is not going to be handled， wrap and return up the call stack
+- Once an error is handled， it is not allowed to be passed up the call stack any longer
+
+
+
+
+
+### 2.3.3 1.13版本的异常处理
+
