@@ -522,3 +522,14 @@ you should only handle errors once. Hadnling an error means inspecting the error
 
 ### 2.3.3 1.13版本的异常处理
 
+在Go 1.13中fmt.Errorf支持新的`%w`谓语，包装的错误可用于errors.Is以及errors.As:
+
+```go
+if err != nil {
+    return fmt.Errorf("decompress %v : %w", name, ErrPermission)
+}
+if errors.Is(err, ErrPermission) ...
+```
+
+**解决了fmt的根因丢失问题，以及自定义错误类型使用麻烦，强耦合，需要断言等问题**
+
