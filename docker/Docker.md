@@ -64,7 +64,7 @@
 ## 2. 虚拟机技术 vs 容器虚拟化技术
 
 ![容器与虚拟机区别](../docs/vm-cm.jpg)
- 
+
 #### 虚拟机
 
 多个虚拟机系统在hypervisor上运行，以达到虚拟化，而hypervisor是基于硬件的虚拟化技术
@@ -389,3 +389,27 @@ USER 用于指定运行镜像所使用的用户
 
 使用USER指定用户时，可以使用用户名、UID 或 GID，或是两者的组合
 
+
+
+
+
+# 12. Docker安装的先决条件
+
+- 运行64位CPU架构的计算机，Docker目前不支持32位
+- 运行Linux 3.8或者更高版本内核。因为低版本的运行结果会有很大的不同
+- 内核必须支持一种适合的存储驱动
+  - Device Manager
+  - AUFS
+  - vfs
+  - btrfs
+  - ZFS（在Docker 1.7中引入）
+  - 默认存储驱动通常是Device Mapper或AUFS
+- 内核必须支持并开启cgroup和命名空间namespace的功能
+
+
+
+## 12.1 Ubuntu和Debian中安装Docker
+
+### 12.1.1 内核
+
+`uname -a`
