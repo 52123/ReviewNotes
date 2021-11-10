@@ -412,4 +412,39 @@ USER 用于指定运行镜像所使用的用户
 
 ### 12.1.1 内核
 
-`uname -a`
+- `uname -a`  检查内核版本信息
+
+- 假如需要升级内核
+  - sudo apt-get update
+  - sudo apt-get install linux_XXX  更新内核
+  - sudo update-grub   更新Ubuntu Precise的启动加载器
+  - sudo reboot 重启
+
+
+
+### 12.1.2 检查Device Mapper
+
+Device Mapper可以在一种文件系统中存储多台虚拟设备
+
+- 检查Device Mapper
+  - `ls -l /sys/class/misc/device-mapper`  确认是否安装
+  - `sudo grep device-mapper /proc/devices` 检查是否有device-mapper条目
+- 加载Device Mapper模块
+  - sudo modprobe dm_mod
+
+
+
+### 12.2.1 安装Docker
+
+``
+
+
+
+### 12.2.9 守护进程
+
+Docker以root权限运行它的守护进程，来处理普通用户无法完成的操作
+
+- 开启Docker守护进程的调试模式  `sudo docker daemon -D`
+- 检查Docker守护进程是否正在运行 
+  -  `sudo status docker`   Ubuntu
+  - `sudo service docker start`
