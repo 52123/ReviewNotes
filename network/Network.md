@@ -1483,6 +1483,56 @@ IP 头部中有一个表示分片偏移量的字段，用来表示该分段在�
 
 
 
+给定IP地址和子网掩码以后，主机就可以确定IP数据报的目的是：(1)本子网上的主机；(2)本网络中其他子网中的主机；(3)其他网络上的主机。如果知道本机的IP地址，那么就知道它是否为A类、B类或C类地址(从IP地址的高位可以得知)，也就知道网络号和子网号之间的分界线。而根据子网掩码就可知道子网号与主机号之间的分界线
+
+### 9. IP报文格式以及作用
+
+![image-20211118151345745](D:\study\ReviewNotes\docs\IP报文格式.png)
+
+
+
+- 4位版本号： 目前的协议版本是4，因此称为 IPv4
+- 4位首部长度：代表首部占了32位的多少位。由于它是一个**4比特字段**，首部最多占 ( 2 ^ 4 - 1) * **4** = 60个字节
+- 8位TOS服务类型：现在大多数实现都不支持。
+- 16位总长度：IP数据包最长可达65535字节。可根据16位总长度 和 4位首部长度得知数据内容长度以及起始位置
+- 16位标识字段：唯一地标识主机发送地每一份数据包。通常每发送一份报文它的值就会+1。
+- 3位标志：
+- 13位片偏移：
+- 8位TTL生存时间：设置了数据报可以经过的最多路由器数。 TTL的初始值由源主机设置（通常为32或64），**一旦经过一个处理它的路由器，它的值就减去1**。**当该字段的值为0时，数据报就被丢弃，并发送ICMP报文通知源主机**
+- 8位协议字段：1表示ICMP协议，2表示IGMP协议，6表示TCP协议，17表示UDP协议
+- 16位首部校验和：根据IP首部计算的检验和码，不对首部后面地数据进行计算。**ICMP、IGMP、UDP和TCP在它们各自的首部中均含有同时覆盖首部和数据检验和码**。。。 接收方算出来结果应该为0xffff，否则丢弃掉数据报，由上层去发现丢失的数据报并进行重传
+
+
+
+### 10. Header Checksum
+
+The header is shown is bold and the checksum is underlined
+
+**4500 0073 0000 4000 4011 b861 c0a8 0001
+c0a8 00c7** 0035 e97c 005f 279f 1e4b 8180
+
+- calculate the sum of each 16 bit value with the header 
+  - `4500 + 0073 + 0000 + 4000 + 4011 + c0a8 + 0001 + c0a8 + 00c7 = 2479C` (equivalent to 149,404 in decimal)
+- convert the value 2479C to binary
+  - 0010 0100 0111 1001 1100
+- the first 4 bits are the carry and will be added to the rest of the value
+  - 0010 + 0100 0111 1001 1100 = 0100 0111 1001 1110
+- flip every bit in that value
+  - becomes 1011 1000 0110 0001 = B861
+
+
+
+Verifing an IPv4 header checksum
+
+- the same procedure is used as above, except that the original header checksum is not omitted
+  - 4500 + 0073 + 0000 + 4000 + 4011 + b861 + c0a8 + 0001 + c0a8 + 00c7 = 2fffd
+- add the carry bits:
+  - fffd + 2 = ffff
+
+
+
+
+
 ## 五、数据链路层
 
 ### 1. MAC地址和IP地址分别有什么用
@@ -1570,6 +1620,22 @@ PPP 协议具有以下特点：
 一个包从发送端传输到接收端，中间要跨越很多个网络，每条链路的 MTU 都可能不一样，这个通信过程中最小的 MTU 称为「路径 MTU（Path MTU）」
 
 路径 MTU 就跟木桶效应是一个道理，木桶的盛水量由最短的那条短板决定，路径 MTU 也是由通信链条中最小的 MTU 决定
+
+
+
+
+
+### 11. 帧的格式
+
+![image-20211120162114934](..\docs\帧的报文格式.png)
+
+
+
+- 6个字节目的地址：指的是目的主机的MAC地址
+- 6字节源地址：指的是请求端主机的MAC地址
+- 2个字节以太网类型：IPv4为0800，ARP为0806， RARP为0835
+
+
 
 ## 六、物理层
 
@@ -2763,3 +2829,71 @@ TCP 协议头部没有经过任何加密和认证，所以在传输过程中很�
 ### 2. Socket通信
 
 ![Socket通信过程](../docs/Socket通信过程.png)
+
+
+
+
+
+
+
+
+
+# 十九、平时遇到的问题
+
+
+
+## 无法通过Windows宿主机访问WSL的应用 /  Docker的端口映射
+
+### Windows
+
+- 查询端口映射情况 `netsh interface protproxy show v4tov4`
+- 增加端口映射 `netsh interface portproxy add v4tov4 listenaddress=[外网IP] listenport = [内网端口] connectaddress=[内网IP] connectport = [内网端口]`
+- 删除一个端口映射 `netsh interface portproxy delete v4tov4 listenaddress=[外网IP] linstenport=[外网端口]`
+
+### Linux
+
+- 允许数据包转发
+
+```echo 1 >/proc/sys/net/ipv4/ip_forward
+iptables -t nat -A POSTROUTING -j MASQUERADE
+iptables -A FORWARD -i [内网网卡名称] -j ACCEPT
+iptables -t nat -A POSTROUTING -s [内网网段] -o [外网网卡名称] -j MASQUERADE
+例：
+echo 1 >/proc/sys/net/ipv4/ip_forward
+iptables -t nat -A POSTROUTING -j MASQUERADE
+iptables -A FORWARD -i ens33 -j ACCEPT
+iptables -t nat -A POSTROUTING -s 192.168.50.0/24 -o ens37 -j MASQUERADE
+```
+
+- 设置端口映射
+
+```stylus
+iptables -t nat -A PREROUTING -p tcp -m tcp --dport [外网端口] -j DNAT --to-destination [内网地址]:[内网端口]
+例：
+iptables -t nat -A PREROUTING -p tcp -m tcp --dport 6080 -j DNAT --to-destination 10.0.0.100:6090
+```
+
+
+
+
+
+### 环回接口
+
+作用：**Linux支持环回接口以允许运行在同一台上的客户程序和服务器程序用TCP/IP进行通信**
+
+预留了A类网络 127给环回接口。  大多数系统把IP地址127.0.0.1分配给环回接口，并命名为localhost
+
+![image-20211116123349784](D:\study\ReviewNotes\docs\环回地址.png)
+
+- 传给环回地址的任何数据均作为IP输入
+- 传给广播地址或多播地址的数据包会复制一份传给环回接口，然后送到以太网上。因为广播传送和多播传送的定义包含主机本身
+- 任何传给该主机IP地址的数据均送到环回接口
+
+
+
+用传输层和网络层的方法来处理环回数据可以简化涉及，把环回接口看作网络层下面的一个链路层
+
+
+
+BSD系统定义了变量useloopback，并初始化为1。但是，如果这个变量置为0，以太网驱动程序就会把本地分组送到网络，而不是送到环回接口上。它也许不能工作，这取决于所使用的以太网接口卡和设备驱动程序
+
