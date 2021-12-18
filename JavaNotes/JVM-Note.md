@@ -1340,7 +1340,7 @@ select id , mr.created_date , description , ics_sequence , ics_uid , mr.meeting_
 
 ##### 1.2.2 性能问题分析
 
-用jstack 查看，GC非常频繁，1秒3次YGC，大概20秒一次Full GC
+用jstat查看，GC非常频繁，1秒3次YGC，大概20秒一次Full GC
 
 因为用的是2GB的内存，堆参数 -Xmx、-Xms为1280MB左右
 
@@ -1404,7 +1404,7 @@ MeetingRecord : MeetingMember   1: 10
 
 ![Screen Shot 2021-04-18 at 10.26.34 PM](../docs/Meeting对象优化后GC.png)
 
-![Screen Shot 2021-04-18 at 10.42.49 PM](/Users/user/IdeaProjects/ReviewNotes/docs/Meeting优化后的TCP缓冲区.png)
+![Screen Shot 2021-04-18 at 10.42.49 PM](../docs/Meeting优化后的TCP缓冲区.png)
 
 ![Screen Shot 2021-04-18 at 10.38.24 PM](../docs/Meeting优化后的时延.png)
 
